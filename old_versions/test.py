@@ -361,15 +361,12 @@ if __name__ == '__main__':
     plt.show()
 
     # Frequency graphic
-    fig, (ax, ax2) = plt.subplots(1, 2)
+    fig, (ax) = plt.subplots(1, 1)
     im = ax.imshow(S.pc.freq)
-    im2 = ax2.imshow(S.pc.freq1)
 
     # Show all ticks...
     ax.set_xticks(np.arange(Sim.n_neurons))
     ax.set_yticks(np.arange(Sim.n_neurons))
-    ax2.set_xticks(np.arange(Sim.n_neurons))
-    ax2.set_yticks(np.arange(Sim.n_neurons))
 
     # # Rotate the tick labels and set their alignment.
     # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
@@ -382,11 +379,8 @@ if __name__ == '__main__':
         for j in range(Sim.n_neurons):
             text = ax.text(j, i, '{:0.4f}'.format(S.pc.freq[i, j]),
                            ha="center", va="center", color="w")
-            text2 = ax2.text(j, i, '{:0.4f}'.format(S.pc.freq1[i, j]),
-                             ha="center", va="center", color="w")
 
-    ax.set_title("Neurons spike frequency 0-1000")
-    ax2.set_title("Neurons spike frequency 1000-2000")
+    ax.set_title("Neurons spike frequency")
     fig.tight_layout()
     plt.show()
 

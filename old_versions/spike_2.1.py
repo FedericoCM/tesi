@@ -1,3 +1,4 @@
+
 """
 Creation date: 21/05/19
 Last update: 23/07/19
@@ -5,7 +6,6 @@ Author: Federico Cascino Milani
 Title: Spiking neuron net
 Description:
 """
-
 
 # ------------ IMPORT ------------ #
 
@@ -28,7 +28,7 @@ class Sim:
     # Net dimensions
     n_neurons = 10                   # n × n is number of output neurons
     m_inp_nodes = 10                 # m × m is number of input neurons
-    input_w_range = (0., 5000.)      # weights range for W_X_OUT matrix
+    input_w_range = (0., 2800.)      # weights range for W_X_OUT matrix
 
     # Lateral inibition (see beta in Net class)
     positive_sigma = 0.3             # sigma^(-1) of positive gaussian
@@ -56,7 +56,8 @@ class Sim:
         for t in range(1, Sim.duration):
             self.inp.inp_activation(t)
             self.pc.activation(t, self.inp)
-        self.pc.frequency()
+        self.pc.frequency(0, int(Sim.duration / 3))
+        self.pc.frequency(int(Sim.duration * 2 / 3), Sim.duration, 1)
         self.inp.frequency()
 
     # Write on file
@@ -81,9 +82,6 @@ class Neuron:
     # Data structures
     def __init__(self):
         # refractory counter (used in changev)
-        a = -30.
-        b = -25.
-        self.threshold = (b - a) * np.random.rand() + a
         self.t_ref = 0
 
         # neuron voltage during time (mV)
@@ -98,15 +96,16 @@ class Neuron:
 
     # Modify membrane potential if voltage > treshold
     # we have spike and ripolarisation
-    def changev(self, t):
+    def changev(self, t, vol):
         if t > self.t_ref:
+            self.v_in[t] += vol
             # compute voltage by bacward euler derivative
             self.voltage[t] = self.voltage[t - 1] + \
                 (Sim.dt / Sim.tau) * \
                 (-self.voltage[t - 1] + self.v_in[t])
 
             # do spike and ripolarisation
-            if self.voltage[t] >= self.threshold:
+            if self.voltage[t] >= Sim.threshold:
                 self.voltage[t] = Sim.v_spike
                 self.t_ref = t + Sim.abs_ref
                 self.voltage[t + Sim.abs_ref: t: -1] = Sim.v_reset
@@ -115,6 +114,9 @@ class Neuron:
             # set reset potential as min voltage value
             if self.voltage[t] < Sim.v_reset:
                 self.voltage[t] = Sim.v_reset
+
+    def __str__(self):
+        return self.voltage
 
 
 class Net:
@@ -175,27 +177,54 @@ class Net:
     # PSP into neuron i,k at timestep t
     def activation(self, t, inp):
         # contribution of lateral neurons
+        # for i in range(self.n):
+        #     for k in range(self.n):
+        #         n1 = self.neurons[i, k]
+        #         # for j in range(self.n):
+        #         #     for l in range(self.n):
+        #         #         n2 = self.neurons[j, l]
+        #         #         if n2.fire[t - 1] == 1:
+        #         #             n1.v_in[t] += self.NETCON[i, k][j, l]
+
+        #         # summation of visual stimuli to neuron i,k
+        #         for x in range(inp.m):
+        #             for y in range(inp.m):
+        #                 m1 = inp.neurons[x, y]
+        #                 if m1.fire[t - 1] == 1:
+        #                     n1.v_in[t] += inp.W_X_OUT[x,
+        #                                               y][i, k] / (inp.m * inp.m)
+
+        #         # change neuron voltage
+        #         self.neurons[i, k].changev(t)
+
+        vol = 0.
+        p = []
+        o = []
+
+        # scan firing neurons
         for i in range(self.n):
             for k in range(self.n):
-                n1 = self.neurons[i, k]
-                for j in range(self.n):
-                    for l in range(self.n):
-                        n2 = self.neurons[j, l]
-                        if n2.fire[t - 1] == 1:
-                            n1.v_in[t] += self.NETCON[i, k][j, l]
+                if self.neurons[i, k].fire[t - 1] == 1:
+                    p.append([i, k])
+        for x in range(inp.m):
+            for y in range(inp.m):
+                if inp.neurons[x, y].fire[t - 1] == 1:
+                    o.append([x, y])
 
-                # summation of visual stimuli to neuron i,k
-                for x in range(inp.m):
-                    for y in range(inp.m):
-                        m1 = inp.neurons[x, y]
-                        if m1.fire[t - 1] == 1:
-                            n1.v_in[t] += inp.W_X_OUT[x,
-                                                      y][i, k] / (inp.m * inp.m)
+        # sum input to neuron i,k
+        for i in range(self.n):
+            for k in range(self.n):
+                # sum input of firing neurons
+                # for r in p:
+                #     vol += self.NETCON[i, k][r]
+                for s in o:
+                    vol += inp.W_X_OUT[s][i, k] / (inp.m * inp.m)
 
-                # change neuron voltage
-                self.neurons[i, k].changev(t)
+                # call change voltage function
+                self.neurons[i, k].changev(t, vol)
+        print(p, o)
 
-    # cal medium frequency and collect arrays for raster plot
+    # Calulate medium frequency and collect arrays for raster plot
     def frequency(self, a=0, b=Sim.duration, num=0):
         arrayinutile = np.arange(a, b, dtype=int)
 
@@ -209,11 +238,9 @@ class Net:
                         r.append(t)
                 if num == 0:
                     self.freq[i, k] = s / (b - a)
-                # if num == 1:
-                #     self.freq1[i, k] = s / (b - a)
+                if num == 1:
+                    self.freq1[i, k] = s / (b - a)
                 self.raster.append(r)
-        self.h = np.sort(self.freq, axis=None)
-        print(self.h)
 
     # def raster(self, t):
     #     self.r = np.zeros([self.n, self.n, Sim.duration])
@@ -234,14 +261,12 @@ class InputNet(Net):
                 self.neurons[i, k] = Neuron()
         # visual stimuli during time
         self.X = np.zeros([self.m, self.m, Sim.duration])
-        # for t in range(int(Sim.duration / 3)):
-        #     self.X[2, :, t] = 1.
-        # for t in range(int(Sim.duration * 2 / 3), Sim.duration):
-        #     self.X[6, :, t] = 1.
+        for t in range(int(Sim.duration / 3)):
+            self.X[2, :, t] = 1.
+        for t in range(int(Sim.duration * 2 / 3), Sim.duration):
+            self.X[6, :, t] = 1.
         # self.visual()
-        a = np.random.rand(self.m)
-        for t in range(Sim.duration):
-            self.X[:, 5, t] = a
+
         # weights from input to output
         self.temp = np.random.rand(m, m, n, n)
 
@@ -249,7 +274,6 @@ class InputNet(Net):
         a = Sim.input_w_range[0]
         b = Sim.input_w_range[1]
         self.W_X_OUT = (b - a) * self.temp + a
-
         # # scope matrix
         # self.XCON = np.zeros([self.m, self.m,
         #                       self.n, self.n])
@@ -288,14 +312,10 @@ class InputNet(Net):
     def inp_activation(self, t):
         for x in range(self.m):
             for y in range(self.m):
-                f = self.X[x, y][t] * 200.
-                if f != 0:
-                    fre = int(1000 / f)
-                    m1 = self.neurons[x, y]
-                    m1.fire[0:Sim.duration:fre] = 1
-                # if self.X[x, y][t - 1] == 1. and t > m1.t_ref:
-                #     m1.fire[t] = 1
-                #     m1.t_ref = t + Sim.abs_ref
+                m1 = self.neurons[x, y]
+                if self.X[x, y][t - 1] == 1. and t > m1.t_ref:
+                    m1.fire[t] = 1
+                    m1.t_ref = t + Sim.abs_ref
 
     # # input distance decay function
     # def alfa(self, xs, ys, x, y, r, max):
@@ -347,7 +367,7 @@ if __name__ == '__main__':
     #         print(pc.neurons[i][k].w)
 
     # Raster plot
-    col1 = np.random.rand((Sim.n_neurons ** 2), 3)
+    col1 = np.random.rand(2 * (Sim.n_neurons ** 2), 3)
     col2 = np.random.rand((Sim.m_inp_nodes ** 2), 3)
     plt.figure(1)
     plt.subplot(211)
@@ -411,7 +431,7 @@ if __name__ == '__main__':
         size = n * m * 0.08
         plt.ion()
         fig, axs = plt.subplots(n, n, sharex=True, sharey=True, gridspec_kw={
-            'hspace': 0, 'wspace': 0}, figsize=(size, size))
+                                'hspace': 0, 'wspace': 0}, figsize=(size, size))
         fig.suptitle(title)
         return axs
 
@@ -425,11 +445,6 @@ if __name__ == '__main__':
                   'Input weights by neuron position')
     mat_show(ax1, S.inp.W_X_OUT)
     plt.show()
-
-    # plt.figure()
-    # plt.pcolor(S.inp.W_X_OUT)
-    # plt.show()
-
     # plt.plot(S.pc.neurons[5][0].voltage)
     # plt.plot(S.pc.neurons[5][3].voltage)
     # plt.plot(S.pc.neurons[5][6].voltage)
